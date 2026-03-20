@@ -1,0 +1,119 @@
+name: Database Backup
+
+on:
+  workflow_dispatch:
+    inputs:
+      dbms:
+        description: 'Database type (mysql, postgresql, mongodb, sqlite)'
+        required: true
+        default: 'sqlite'
+      operation:
+        description: 'Operation (backup, restore)'
+        required: true
+        default: 'backup'
+        type: choice
+        options:
+          - backup
+          - restore
+
+  schedule:
+    - cron: '0 2 * * *'  # Daily at 2 AM UTC
+
+env:
+  DBMS: ${{ github.event.inputs.dbms || 'sqlite' }}
+  DB_HOST: ${{ secrets.DB_HOST || 'localhost' }}
+  DB_PORT: ${{ secrets.DB_PORT || '5432' }}
+  DB_USER: ${{ secrets.DB_USER }}
+  DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+  DB_NAME: ${{ secrets.DB_NAME }}
+  SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install -e .
+
+      - name: Run database backup
+        run: |
+          dbbackup backup \
+            --dbms "${{ env.DBMS }}" \
+            --host "${{ env.DB_HOST }}" \
+            --port "${{ env.DB_PORT }}" \
+            --username "${{ env.DB_USER }}" \
+            --password "${{ env.DB_PASSWORD }}" \
+            --database "${{ env.DB_NAME }}" \
+            --compression gzip \
+            --no-notify
+        continue-on-error: true
+
+      - name: List backups
+        run: dbbackup list
+
+      - name: Upload backup artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: database-backup-${{ github.run_number }}
+          path: ~/.dbbackup/backups/*.gz
+          retention-days: 7
+
+      - name: Send Slack notification on failure
+        if: failure()
+        uses: slackapi/slack-github-action@v1.25.0
+        with:
+          payload: |
+            {
+              "text": "❌ Database backup failed!",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*❌ Database Backup Failed*\n\n*Run:* #${{ github.run_number }}\n*DB:* ${{ env.DBMS }} → ${{ env.DB_NAME }}"
+                  }
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+        continue-on-error: true
+
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install -e ".[dev]"
+
+      - name: Run tests
+        run: pytest tests/ -v
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: test-results/
+          retention-days: 7
+        continue-on-error: true
