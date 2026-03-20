@@ -2,11 +2,12 @@
 
 import asyncio
 import logging
-from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 import uvicorn
 
@@ -14,10 +15,22 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = FastAPI(
-    title="VaultDB API",
-    description="Database Backup & Restore Web API",
+    title="VaultDB",
+    description="Database Backup & Restore Dashboard",
     version="1.0.0",
 )
+
+STATIC_PATH = Path(__file__).parent / "static"
+
+
+@app.get("/")
+async def root():
+    """Serve the frontend dashboard."""
+    return FileResponse(str(STATIC_PATH / "index.html"))
+
+
+app.mount("/static", StaticFiles(directory=str(STATIC_PATH)), name="static")
+
 
 app.add_middleware(
     CORSMiddleware,
@@ -57,15 +70,6 @@ class ConnectionTestRequest(BaseModel):
     username: str = ""
     password: str = ""
     database: str
-
-
-@app.get("/")
-async def root():
-    return {
-        "name": "VaultDB API",
-        "version": "1.0.0",
-        "status": "healthy",
-    }
 
 
 @app.get("/health")

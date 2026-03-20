@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VaultDB - Database Backup Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            color: #fff;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        
+        header {
+            text-align: center;
+            padding: 2rem 0;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            margin-bottom: 2rem;
+        }
+        
+        h1 {
+            font-size: 2.5rem;
+            background: linear-gradient(90deg, #00d9ff, #00ff88);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 0.5rem;
+        }
+        
+        .subtitle {
+            color: #888;
+            font-size: 1.1rem;
+        }
+        
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        
+        .card {
+            background: rgba(255,255,255,0.05);
+            border-radius: 16px;
+            padding: 1.5rem;
+            border: 1px solid rgba(255,255,255,0.1);
+            transition: all 0.3s ease;
+        }
+        
+        .card:hover {
+            transform: translateY(-5px);
+            border-color: rgba(0,217,255,0.3);
+            box-shadow: 0 10px 40px rgba(0,217,255,0.1);
+        }
+        
+        .card h2 {
+            font-size: 1.2rem;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .card h2 span {
+            font-size: 1.5rem;
+        }
+        
+        .form-group {
+            margin-bottom: 1rem;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: #aaa;
+            font-size: 0.9rem;
+        }
+        
+        select, input {
+            width: 100%;
+            padding: 0.75rem;
+            border-radius: 8px;
+            border: 1px solid rgba(255,255,255,0.1);
+            background: rgba(255,255,255,0.05);
+            color: #fff;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+        }
+        
+        select:focus, input:focus {
+            outline: none;
+            border-color: #00d9ff;
+            box-shadow: 0 0 20px rgba(0,217,255,0.2);
+        }
+        
+        .btn {
+            width: 100%;
+            padding: 1rem;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-top: 0.5rem;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(90deg, #00d9ff, #00ff88);
+            color: #1a1a2e;
+        }
+        
+        .btn-primary:hover {
+            transform: scale(1.02);
+            box-shadow: 0 5px 20px rgba(0,217,255,0.3);
+        }
+        
+        .btn-danger {
+            background: linear-gradient(90deg, #ff6b6b, #ff8e53);
+            color: #fff;
+        }
+        
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .output {
+            margin-top: 1rem;
+            padding: 1rem;
+            border-radius: 8px;
+            background: rgba(0,0,0,0.3);
+            font-family: monospace;
+            font-size: 0.9rem;
+            white-space: pre-wrap;
+            display: none;
+        }
+        
+        .output.show {
+            display: block;
+        }
+        
+        .success {
+            border: 1px solid #00ff88;
+            color: #00ff88;
+        }
+        
+        .error {
+            border: 1px solid #ff6b6b;
+            color: #ff6b6b;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 2rem;
+            display: none;
+        }
+        
+        .loading.show {
+            display: block;
+        }
+        
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid rgba(255,255,255,0.1);
+            border-top-color: #00d9ff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .status-badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            margin-bottom: 1rem;
+        }
+        
+        .status-healthy {
+            background: rgba(0,255,136,0.2);
+            color: #00ff88;
+        }
+        
+        .status-error {
+            background: rgba(255,107,107,0.2);
+            color: #ff6b6b;
+        }
+        
+        .backup-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        
+        .backup-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+        
+        .backup-item:last-child {
+            border-bottom: none;
+        }
+        
+        .backup-name {
+            font-family: monospace;
+            font-size: 0.85rem;
+        }
+        
+        .backup-size {
+            color: #888;
+            font-size: 0.8rem;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 2rem;
+            color: #666;
+        }
+        
+        footer {
+            text-align: center;
+            padding: 2rem;
+            color: #666;
+            font-size: 0.9rem;
+        }
+        
+        footer a {
+            color: #00d9ff;
+            text-decoration: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🔐 VaultDB</h1>
+            <p class="subtitle">Database Backup & Restore Dashboard</p>
+        </header>
+        
+        <div class="grid">
+            <!-- Connection Test -->
+            <div class="card">
+                <h2><span>🔌</span> Test Connection</h2>
+                <div class="form-group">
+                    <label>Database Type</label>
+                    <select id="testDbms">
+                        <option value="sqlite">SQLite</option>
+                        <option value="postgresql">PostgreSQL</option>
+                        <option value="mysql">MySQL</option>
+                        <option value="mongodb">MongoDB</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Database Path / Name</label>
+                    <input type="text" id="testDatabase" placeholder="/tmp/test.db">
+                </div>
+                <button class="btn btn-primary" onclick="testConnection()">Test Connection</button>
+                <div id="testOutput" class="output"></div>
+            </div>
+            
+            <!-- Create Backup -->
+            <div class="card">
+                <h2><span>💾</span> Create Backup</h2>
+                <div class="form-group">
+                    <label>Database Type</label>
+                    <select id="backupDbms">
+                        <option value="sqlite">SQLite</option>
+                        <option value="postgresql">PostgreSQL</option>
+                        <option value="mysql">MySQL</option>
+                        <option value="mongodb">MongoDB</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Database Path / Name</label>
+                    <input type="text" id="backupDatabase" placeholder="/tmp/mydb.db">
+                </div>
+                <div class="form-group">
+                    <label>Compression</label>
+                    <select id="backupCompression">
+                        <option value="gzip">Gzip (Recommended)</option>
+                        <option value="bzip2">Bzip2</option>
+                        <option value="lzma">LZMA</option>
+                        <option value="none">None</option>
+                    </select>
+                </div>
+                <button class="btn btn-primary" onclick="createBackup()">Create Backup</button>
+                <div id="backupOutput" class="output"></div>
+            </div>
+            
+            <!-- Restore Backup -->
+            <div class="card">
+                <h2><span>🔄</span> Restore Backup</h2>
+                <div class="form-group">
+                    <label>Backup File Path</label>
+                    <input type="text" id="restoreFile" placeholder="/path/to/backup.sql.gz">
+                </div>
+                <div class="form-group">
+                    <label>Database Type</label>
+                    <select id="restoreDbms">
+                        <option value="sqlite">SQLite</option>
+                        <option value="postgresql">PostgreSQL</option>
+                        <option value="mysql">MySQL</option>
+                        <option value="mongodb">MongoDB</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Target Database</label>
+                    <input type="text" id="restoreDatabase" placeholder="/tmp/restored.db">
+                </div>
+                <button class="btn btn-danger" onclick="restoreBackup()">Restore Backup</button>
+                <div id="restoreOutput" class="output"></div>
+            </div>
+            
+            <!-- View Backups -->
+            <div class="card">
+                <h2><span>📂</span> Available Backups</h2>
+                <button class="btn btn-primary" onclick="loadBackups()">Refresh List</button>
+                <div id="backupList" class="backup-list">
+                    <div class="empty-state">Click refresh to load backups</div>
+                </div>
+            </div>
+            
+            <!-- API Status -->
+            <div class="card">
+                <h2><span>📊</span> API Status</h2>
+                <div id="statusBadge" class="status-badge status-healthy">Checking...</div>
+                <p id="statusText" style="color: #888; font-size: 0.9rem;">API is responding</p>
+                <button class="btn btn-primary" onclick="checkStatus()" style="margin-top: 1rem;">Refresh Status</button>
+            </div>
+        </div>
+        
+        <footer>
+            Powered by <a href="https://github.com/Debrupbanik/VaultDB">VaultDB</a> - Database Backup Utility
+        </footer>
+    </div>
+    
+    <script>
+        const API_BASE = window.location.origin;
+        
+        async function checkStatus() {
+            const badge = document.getElementById('statusBadge');
+            const text = document.getElementById('statusText');
+            
+            badge.textContent = 'Checking...';
+            badge.className = 'status-badge status-healthy';
+            
+            try {
+                const res = await fetch(`${API_BASE}/health`);
+                if (res.ok) {
+                    badge.textContent = '🟢 Healthy';
+                    badge.className = 'status-badge status-healthy';
+                    text.textContent = 'API is responding normally';
+                } else {
+                    throw new Error('Status code: ' + res.status);
+                }
+            } catch (e) {
+                badge.textContent = '🔴 Error';
+                badge.className = 'status-badge status-error';
+                text.textContent = 'API is not responding: ' + e.message;
+            }
+        }
+        
+        async function testConnection() {
+            const dbms = document.getElementById('testDbms').value;
+            const database = document.getElementById('testDatabase').value;
+            const output = document.getElementById('testOutput');
+            
+            if (!database) {
+                showOutput(output, 'Please enter a database path', 'error');
+                return;
+            }
+            
+            showLoading(output, 'Testing connection...');
+            
+            try {
+                const res = await fetch(`${API_BASE}/test-connection`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ dbms, database })
+                });
+                
+                const data = await res.json();
+                
+                if (res.ok && data.status === 'success') {
+                    showOutput(output, '✅ Connection successful!\n\n' + JSON.stringify(data, null, 2), 'success');
+                } else {
+                    showOutput(output, '❌ Connection failed\n\n' + JSON.stringify(data, null, 2), 'error');
+                }
+            } catch (e) {
+                showOutput(output, '❌ Error: ' + e.message, 'error');
+            }
+        }
+        
+        async function createBackup() {
+            const dbms = document.getElementById('backupDbms').value;
+            const database = document.getElementById('backupDatabase').value;
+            const compression = document.getElementById('backupCompression').value;
+            const output = document.getElementById('backupOutput');
+            
+            if (!database) {
+                showOutput(output, 'Please enter a database path', 'error');
+                return;
+            }
+            
+            showLoading(output, 'Creating backup...');
+            
+            try {
+                const res = await fetch(`${API_BASE}/backup`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ dbms, database, compression })
+                });
+                
+                const data = await res.json();
+                
+                if (res.ok) {
+                    showOutput(output, '✅ Backup started!\n\n' + JSON.stringify(data, null, 2), 'success');
+                    loadBackups();
+                } else {
+                    showOutput(output, '❌ Backup failed\n\n' + JSON.stringify(data, null, 2), 'error');
+                }
+            } catch (e) {
+                showOutput(output, '❌ Error: ' + e.message, 'error');
+            }
+        }
+        
+        async function restoreBackup() {
+            const backup_file = document.getElementById('restoreFile').value;
+            const dbms = document.getElementById('restoreDbms').value;
+            const database = document.getElementById('restoreDatabase').value;
+            const output = document.getElementById('restoreOutput');
+            
+            if (!backup_file || !database) {
+                showOutput(output, 'Please fill all fields', 'error');
+                return;
+            }
+            
+            showLoading(output, 'Restoring backup...');
+            
+            try {
+                const res = await fetch(`${API_BASE}/restore`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ backup_file, dbms, database })
+                });
+                
+                const data = await res.json();
+                
+                if (res.ok) {
+                    showOutput(output, '✅ Restore started!\n\n' + JSON.stringify(data, null, 2), 'success');
+                } else {
+                    showOutput(output, '❌ Restore failed\n\n' + JSON.stringify(data, null, 2), 'error');
+                }
+            } catch (e) {
+                showOutput(output, '❌ Error: ' + e.message, 'error');
+            }
+        }
+        
+        async function loadBackups() {
+            const container = document.getElementById('backupList');
+            container.innerHTML = '<div class="loading show"><div class="spinner"></div>Loading...</div>';
+            
+            try {
+                const res = await fetch(`${API_BASE}/backups`);
+                const data = await res.json();
+                
+                if (data.backups && data.backups.length > 0) {
+                    container.innerHTML = data.backups.map(b => `
+                        <div class="backup-item">
+                            <span class="backup-name">${b.name}</span>
+                            <span class="backup-size">${formatSize(b.size)}</span>
+                        </div>
+                    `).join('');
+                } else {
+                    container.innerHTML = '<div class="empty-state">No backups found</div>';
+                }
+            } catch (e) {
+                container.innerHTML = '<div class="empty-state">Error loading backups</div>';
+            }
+        }
+        
+        function showOutput(el, message, type) {
+            el.textContent = message;
+            el.className = `output show ${type}`;
+        }
+        
+        function showLoading(el, message) {
+            el.innerHTML = '<div class="loading show"><div class="spinner"></div>' + message + '</div>';
+        }
+        
+        function formatSize(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+            return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+        }
+        
+        checkStatus();
+    </script>
+</body>
+</html>
