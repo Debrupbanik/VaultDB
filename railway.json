@@ -1,0 +1,5 @@
+[railway]
+entrypoint = "python -m dbbackup.cli"
+
+[deploy.startCommand]
+python = "python -m dbbackup.cli --help"
