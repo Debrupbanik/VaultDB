@@ -1,5 +1,13 @@
 [railway]
-entrypoint = "python -m dbbackup.cli"
+entrypoint = "uvicorn"
+template = "python"
 
-[deploy.startCommand]
-python = "python -m dbbackup.cli --help"
+[railway.variables]
+PYTHON_VERSION = "3.11"
+
+[deploy]
+startCommand = "uvicorn dbbackup.web_api:app --host 0.0.0.0 --port $PORT"
+buildCommand = "pip install -e ."
+
+[settings]
+healthcheckPath = "/health"
