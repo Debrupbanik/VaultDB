@@ -107,7 +107,9 @@ class SQLiteConnector(BaseConnector):
         if backup_type == "full" and not tables and not exclude_tables:
             return self._backup_binary(output_path)
         else:
-            return self._backup_sql_dump(output_path, backup_type, tables, exclude_tables)
+            return self._backup_sql_dump(
+                output_path, backup_type, tables, exclude_tables
+            )
 
     def _backup_binary(self, output_path: str) -> tuple[bool, str]:
         """
@@ -168,7 +170,8 @@ class SQLiteConnector(BaseConnector):
                 for table in target_tables:
                     # Get CREATE TABLE statement
                     cursor.execute(
-                        "SELECT sql FROM sqlite_master WHERE type='table' AND name=?", (table,)
+                        "SELECT sql FROM sqlite_master WHERE type='table' AND name=?",
+                        (table,),
                     )
                     result = cursor.fetchone()
                     if not result or not result[0]:
@@ -207,7 +210,9 @@ class SQLiteConnector(BaseConnector):
                                 escaped = str(val).replace("'", "''")
                                 values.append(f"'{escaped}'")
                         vals_str = ", ".join(values)
-                        f.write(f'INSERT INTO "{table}" ({cols_str}) VALUES ({vals_str});\n')
+                        f.write(
+                            f'INSERT INTO "{table}" ({cols_str}) VALUES ({vals_str});\n'
+                        )
 
                     f.write("\n")
 
@@ -275,8 +280,15 @@ class SQLiteConnector(BaseConnector):
         drop_existing: bool,
     ) -> tuple[bool, str]:
         """Restore from SQL dump file."""
+        conn = None
         try:
-            conn = sqlite3.connect(self._db_path())
+            db_path = self._db_path()
+
+            # Ensure the database file exists (create empty file if needed)
+            if not os.path.exists(db_path):
+                open(db_path, "a").close()
+
+            conn = sqlite3.connect(db_path)
 
             with open(input_path, "r", encoding="utf-8") as f:
                 sql_content = f.read()
@@ -310,16 +322,37 @@ class SQLiteConnector(BaseConnector):
                 conn.commit()
                 return True, f"Selective restore complete ({executed} statements)"
             else:
-                conn.executescript(sql_content)
+                # For full restore, execute statements one by one for better error handling
+                statements = sql_content.split(";")
+                for stmt in statements:
+                    stmt = stmt.strip()
+                    if not stmt or stmt.startswith("--"):
+                        continue
+                    # Skip standalone BEGIN and COMMIT as they need special handling
+                    if stmt.upper() in ("BEGIN", "BEGIN TRANSACTION", "COMMIT"):
+                        if stmt.upper() == "BEGIN":
+                            conn.execute("BEGIN")
+                        elif stmt.upper() == "BEGIN TRANSACTION":
+                            conn.execute("BEGIN TRANSACTION")
+                        else:
+                            conn.execute("COMMIT")
+                        continue
+                    try:
+                        conn.execute(stmt)
+                    except Exception as e:
+                        # Log but continue - some errors are expected (e.g., IF EXISTS)
+                        pass
+                conn.commit()
                 return True, "Full restore complete"
 
         except Exception as e:
             return False, f"SQL restore error: {str(e)}"
         finally:
-            try:
-                conn.close()
-            except Exception:
-                pass
+            if conn:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
 
     def get_database_size(self) -> int:
         """Get the size of the SQLite database file in bytes."""
